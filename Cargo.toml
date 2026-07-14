@@ -1,0 +1,17 @@
+[package]
+name = "argus"
+version = "0.1.0"
+edition = "2024"
+description = "See what your tokens are hiding — a JWT security analysis toolkit"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Psyche919/argus"
+
+[lib]
+name = "argus"
+path = "src/lib.rs"
+
+[[bin]]
+name = "argus"
+path = "src/main.rs"
+
+[dependencies]
