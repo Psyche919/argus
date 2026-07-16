@@ -18,6 +18,11 @@ enum Commands {
         /// The raw JWT string to decode
         token: String,
     },
+    /// Analyze a JWT for common security issues
+    Analyze {
+        /// The raw JWT string to analyze
+        token: String,
+    },
 }
 
 fn main() {
@@ -34,6 +39,28 @@ fn main() {
                     "{}",
                     serde_json::to_string_pretty(&decoded.payload).unwrap()
                 );
+            }
+            Err(e) => {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+        },
+        Commands::Analyze { token } => match argus::decode(&token) {
+            Ok(decoded) => {
+                let findings = argus::run_all(&decoded);
+
+                if findings.is_empty() {
+                    println!("No issues found.");
+                    return;
+                }
+
+                println!("Found {} issue(s):\n", findings.len());
+
+                for finding in &findings {
+                    println!("[{:?}] {}", finding.severity, finding.title);
+                    println!("  {}", finding.description);
+                    println!();
+                }
             }
             Err(e) => {
                 eprintln!("Error: {e}");

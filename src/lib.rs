@@ -4,6 +4,7 @@
 //! This crate exposes the core analysis engine; see the `argus` binary
 //! for the CLI interface.
 
+pub mod checks;
 pub mod error;
 pub mod token;
 
@@ -14,3 +15,5 @@ pub use token::{DecodedToken, decode};
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
+
+pub use checks::{Check, Finding, Severity, run_all};
