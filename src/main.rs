@@ -45,41 +45,51 @@ fn main() {
                 std::process::exit(1);
             }
         },
-        Commands::Analyze { token } => match argus::decode(&token) {
-            Ok(decoded) => {
-                let findings = argus::run_all(&decoded);
-                let risk = argus::score(&findings);
-
-                if findings.is_empty() {
-                    println!("No issues found. Overall risk: None");
-                    return;
+        Commands::Analyze { token } => {
+            let config = match argus::Config::load(std::path::Path::new("argus.toml")) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Error loading config: {e}");
+                    std::process::exit(1);
                 }
+            };
 
-                match risk.overall {
-                    Some(severity) => println!("Overall risk: {severity:?}"),
-                    None => {
-                        unreachable!("overall is None only when findings is empty, handled above")
+            match argus::decode(&token) {
+                Ok(decoded) => {
+                    let findings = argus::run_all(&decoded, &config);
+                    let risk = argus::score(&findings);
+
+                    if findings.is_empty() {
+                        println!("No issues found. Overall risk: None");
+                        return;
+                    }
+
+                    match risk.overall {
+                        Some(severity) => println!("Overall risk: {severity:?}"),
+                        None => unreachable!(
+                            "overall is None only when findings is empty, handled above"
+                        ),
+                    }
+                    println!(
+                        "Findings: {} Critical, {} High, {} Medium, {} Low, {} Info\n",
+                        risk.counts.critical,
+                        risk.counts.high,
+                        risk.counts.medium,
+                        risk.counts.low,
+                        risk.counts.info
+                    );
+
+                    for finding in &findings {
+                        println!("[{:?}] {}", finding.severity, finding.title);
+                        println!("  {}", finding.description);
+                        println!();
                     }
                 }
-                println!(
-                    "Findings: {} Critical, {} High, {} Medium, {} Low, {} Info\n",
-                    risk.counts.critical,
-                    risk.counts.high,
-                    risk.counts.medium,
-                    risk.counts.low,
-                    risk.counts.info
-                );
-
-                for finding in &findings {
-                    println!("[{:?}] {}", finding.severity, finding.title);
-                    println!("  {}", finding.description);
-                    println!();
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    std::process::exit(1);
                 }
             }
-            Err(e) => {
-                eprintln!("Error: {e}");
-                std::process::exit(1);
-            }
-        },
+        }
     }
 }

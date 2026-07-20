@@ -5,6 +5,7 @@
 //! for the CLI interface.
 
 pub mod checks;
+pub mod config;
 pub mod error;
 pub mod scoring;
 pub mod token;
@@ -20,3 +21,5 @@ pub fn version() -> &'static str {
 pub use checks::{Check, Finding, Severity, run_all};
 
 pub use scoring::{RiskScore, SeverityCounts, score};
+
+pub use config::{Config, ConfigError};

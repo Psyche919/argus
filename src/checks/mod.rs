@@ -41,9 +41,10 @@ pub fn all_checks() -> Vec<Box<dyn Check>> {
 }
 
 /// Runs every registered check against a token, collecting all findings.
-pub fn run_all(token: &DecodedToken) -> Vec<Finding> {
+pub fn run_all(token: &DecodedToken, config: &crate::config::Config) -> Vec<Finding> {
     all_checks()
         .iter()
+        .filter(|check| !config.is_disabled(check.id()))
         .filter_map(|check| check.run(token))
         .collect()
 }
@@ -138,7 +139,8 @@ mod tests {
     fn run_all_collects_findings_from_multiple_checks() {
         // The alg:none token should trigger both alg-none and missing-exp.
         let token = decode("eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJhZG1pbiJ9.").unwrap();
-        let findings = run_all(&token);
+        let config = crate::config::Config::default();
+        let findings = run_all(&token, &config);
 
         assert_eq!(findings.len(), 2);
         assert!(findings.iter().any(|f| f.id == "alg-none"));
