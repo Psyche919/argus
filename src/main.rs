@@ -48,13 +48,27 @@ fn main() {
         Commands::Analyze { token } => match argus::decode(&token) {
             Ok(decoded) => {
                 let findings = argus::run_all(&decoded);
+                let risk = argus::score(&findings);
 
                 if findings.is_empty() {
-                    println!("No issues found.");
+                    println!("No issues found. Overall risk: None");
                     return;
                 }
 
-                println!("Found {} issue(s):\n", findings.len());
+                match risk.overall {
+                    Some(severity) => println!("Overall risk: {severity:?}"),
+                    None => {
+                        unreachable!("overall is None only when findings is empty, handled above")
+                    }
+                }
+                println!(
+                    "Findings: {} Critical, {} High, {} Medium, {} Low, {} Info\n",
+                    risk.counts.critical,
+                    risk.counts.high,
+                    risk.counts.medium,
+                    risk.counts.low,
+                    risk.counts.info
+                );
 
                 for finding in &findings {
                     println!("[{:?}] {}", finding.severity, finding.title);

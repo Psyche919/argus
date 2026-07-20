@@ -6,6 +6,7 @@
 
 pub mod checks;
 pub mod error;
+pub mod scoring;
 pub mod token;
 
 pub use error::TokenError;
@@ -17,3 +18,5 @@ pub fn version() -> &'static str {
 }
 
 pub use checks::{Check, Finding, Severity, run_all};
+
+pub use scoring::{RiskScore, SeverityCounts, score};
