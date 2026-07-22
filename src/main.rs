@@ -1,5 +1,4 @@
-use argus::report::{Report, RiskScoreSummary, TokenSummary};
-use argus::{JsonRenderer, Renderer, TerminalRenderer};
+use argus::{JsonRenderer, Renderer, Report, RiskScoreSummary, TerminalRenderer, TokenSummary};
 use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
