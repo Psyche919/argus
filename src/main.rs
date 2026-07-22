@@ -1,4 +1,6 @@
-use clap::{Parser, Subcommand};
+use argus::report::{Report, RiskScoreSummary, TokenSummary};
+use argus::{JsonRenderer, Renderer, TerminalRenderer};
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser)]
 #[command(
@@ -22,7 +24,17 @@ enum Commands {
     Analyze {
         /// The raw JWT string to analyze
         token: String,
+
+        /// Output format
+        #[arg(long, value_enum, default_value_t = Format::Terminal)]
+        format: Format,
     },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum Format {
+    Terminal,
+    Json,
 }
 
 fn main() {
@@ -45,7 +57,7 @@ fn main() {
                 std::process::exit(1);
             }
         },
-        Commands::Analyze { token } => {
+        Commands::Analyze { token, format } => {
             let config = match argus::Config::load(std::path::Path::new("argus.toml")) {
                 Ok(c) => c,
                 Err(e) => {
@@ -54,42 +66,33 @@ fn main() {
                 }
             };
 
-            match argus::decode(&token) {
-                Ok(decoded) => {
-                    let findings = argus::run_all(&decoded, &config);
-                    let risk = argus::score(&findings);
-
-                    if findings.is_empty() {
-                        println!("No issues found. Overall risk: None");
-                        return;
-                    }
-
-                    match risk.overall {
-                        Some(severity) => println!("Overall risk: {severity:?}"),
-                        None => unreachable!(
-                            "overall is None only when findings is empty, handled above"
-                        ),
-                    }
-                    println!(
-                        "Findings: {} Critical, {} High, {} Medium, {} Low, {} Info\n",
-                        risk.counts.critical,
-                        risk.counts.high,
-                        risk.counts.medium,
-                        risk.counts.low,
-                        risk.counts.info
-                    );
-
-                    for finding in &findings {
-                        println!("[{:?}] {}", finding.severity, finding.title);
-                        println!("  {}", finding.description);
-                        println!();
-                    }
-                }
+            let decoded = match argus::decode(&token) {
+                Ok(d) => d,
                 Err(e) => {
                     eprintln!("Error: {e}");
                     std::process::exit(1);
                 }
-            }
+            };
+
+            let findings = argus::run_all(&decoded, &config);
+            let risk = argus::score(&findings);
+
+            let report = Report {
+                token_summary: TokenSummary {
+                    header: decoded.header,
+                    payload: decoded.payload,
+                },
+                findings,
+                risk: RiskScoreSummary::from(risk),
+            };
+
+            let renderer: Box<dyn Renderer> = match format {
+                Format::Terminal => Box::new(TerminalRenderer),
+                Format::Json => Box::new(JsonRenderer),
+            };
+
+            let output = renderer.render(&[report]);
+            println!("{output}");
         }
     }
 }

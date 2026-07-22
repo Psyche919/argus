@@ -3,9 +3,11 @@ mod expired;
 mod header_shape;
 mod missing_exp;
 
+use serde::Serialize;
+
 use crate::token::DecodedToken;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
 pub enum Severity {
     Info,
     Low,
@@ -14,7 +16,7 @@ pub enum Severity {
     Critical,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Finding {
     pub id: &'static str,
     pub severity: Severity,

@@ -1,3 +1,5 @@
+use serde::Serialize;
+
 use crate::checks::{Finding, Severity};
 
 /// A summary of a token's overall risk, derived from its findings.
@@ -15,7 +17,7 @@ pub struct RiskScore {
     pub counts: SeverityCounts,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize)]
 pub struct SeverityCounts {
     pub critical: usize,
     pub high: usize,
