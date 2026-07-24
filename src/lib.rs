@@ -10,6 +10,7 @@ pub mod error;
 pub mod report;
 pub mod scoring;
 pub mod token;
+pub mod verify;
 
 pub use error::TokenError;
 pub use token::{DecodedToken, decode};
@@ -19,6 +20,8 @@ pub use checks::{Check, Finding, Severity, run_all};
 pub use scoring::{RiskScore, SeverityCounts, score};
 
 pub use config::{Config, ConfigError};
+
+pub use verify::{VerificationKey, VerifyOutcome, verify};
 
 pub use report::render::{Renderer, json::JsonRenderer, terminal::TerminalRenderer};
 pub use report::{Report, RiskScoreSummary, TokenSummary};
