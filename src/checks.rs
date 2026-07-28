@@ -1,7 +1,11 @@
 mod alg_none;
+mod excessive_lifetime;
 mod expired;
 mod header_shape;
+mod iat_future;
 mod missing_exp;
+mod nbf_future;
+mod sensitive_data;
 
 use serde::Serialize;
 
@@ -39,6 +43,10 @@ pub fn all_checks() -> Vec<Box<dyn Check>> {
         Box::new(alg_none::AlgNoneCheck),
         Box::new(missing_exp::MissingExpCheck),
         Box::new(expired::ExpiredCheck),
+        Box::new(nbf_future::NbfFutureCheck),
+        Box::new(iat_future::IatFutureCheck),
+        Box::new(sensitive_data::SensitiveDataCheck),
+        Box::new(excessive_lifetime::ExcessiveLifetimeCheck),
     ]
 }
 
@@ -147,5 +155,91 @@ mod tests {
         assert_eq!(findings.len(), 2);
         assert!(findings.iter().any(|f| f.id == "alg-none"));
         assert!(findings.iter().any(|f| f.id == "missing-exp"));
+    }
+
+    #[test]
+    fn nbf_future_check_fires_when_nbf_is_in_future() {
+        let token = decode(
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0IiwibmJmIjo5OTk5OTk5OTk5fQ.c2ln",
+        )
+        .unwrap();
+        let finding = nbf_future::NbfFutureCheck.run(&token);
+
+        assert!(finding.is_some());
+        assert_eq!(finding.unwrap().id, "nbf-future");
+    }
+
+    #[test]
+    fn nbf_future_check_does_not_fire_when_nbf_is_absent() {
+        let token = decode("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0In0.c2lnbmF0dXJl")
+            .unwrap();
+        let finding = nbf_future::NbfFutureCheck.run(&token);
+
+        assert!(finding.is_none());
+    }
+
+    #[test]
+    fn iat_future_check_fires_when_iat_is_in_future() {
+        let token = decode(
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0IiwiaWF0Ijo5OTk5OTk5OTk5fQ.c2ln",
+        )
+        .unwrap();
+        let finding = iat_future::IatFutureCheck.run(&token);
+
+        assert!(finding.is_some());
+        assert_eq!(finding.unwrap().id, "iat-future");
+    }
+
+    #[test]
+    fn iat_future_check_does_not_fire_when_iat_is_in_past() {
+        let token = decode(
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0IiwiaWF0IjoxMDAwMDAwMDAwfQ.c2ln",
+        )
+        .unwrap();
+        let finding = iat_future::IatFutureCheck.run(&token);
+
+        assert!(finding.is_none());
+    }
+
+    #[test]
+    fn sensitive_data_check_fires_on_password_claim() {
+        let token =
+            decode("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwYXNzd29yZCI6InNlY3JldDEyMyJ9.c2ln")
+                .unwrap();
+        let finding = sensitive_data::SensitiveDataCheck.run(&token);
+
+        assert!(finding.is_some());
+        assert_eq!(finding.unwrap().id, "sensitive-data-exposure");
+    }
+
+    #[test]
+    fn sensitive_data_check_does_not_fire_on_benign_claims() {
+        let token = decode("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0In0.c2lnbmF0dXJl")
+            .unwrap();
+        let finding = sensitive_data::SensitiveDataCheck.run(&token);
+
+        assert!(finding.is_none());
+    }
+
+    #[test]
+    fn excessive_lifetime_check_fires_on_long_lived_token() {
+        // iat=0, exp=1000000 (~277 hours) — far beyond the 24-hour threshold.
+        let token =
+            decode("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjAsImV4cCI6MTAwMDAwMH0.c2ln")
+                .unwrap();
+        let finding = excessive_lifetime::ExcessiveLifetimeCheck.run(&token);
+
+        assert!(finding.is_some());
+        assert_eq!(finding.unwrap().id, "excessive-lifetime");
+    }
+
+    #[test]
+    fn excessive_lifetime_check_does_not_fire_on_short_lived_token() {
+        // iat=0, exp=3600 (1 hour) — well within the 24-hour threshold.
+        let token = decode("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjAsImV4cCI6MzYwMH0.c2ln")
+            .unwrap();
+        let finding = excessive_lifetime::ExcessiveLifetimeCheck.run(&token);
+
+        assert!(finding.is_none());
     }
 }
