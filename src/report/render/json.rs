@@ -28,6 +28,7 @@ mod tests {
                 overall: None,
                 counts: SeverityCounts::default(),
             },
+            verification: None,
         };
 
         let output = JsonRenderer.render(&[report]);

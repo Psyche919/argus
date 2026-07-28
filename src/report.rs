@@ -21,6 +21,46 @@ pub struct Report {
     pub token_summary: TokenSummary,
     pub findings: Vec<Finding>,
     pub risk: RiskScoreSummary,
+    pub verification: Option<VerificationSummary>,
+}
+
+/// The outcome of attempting signature verification, shaped for
+/// reporting. `None` on `Report.verification` means no key was supplied
+/// at all — verification simply wasn't attempted, not that it failed.
+#[derive(Debug, Clone, Serialize)]
+pub struct VerificationSummary {
+    pub outcome: VerifyOutcomeSummary,
+    pub key_type: &'static str,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "status")]
+pub enum VerifyOutcomeSummary {
+    Verified,
+    Failed {
+        reason: String,
+    },
+    KeyTypeMismatch {
+        declared_alg: String,
+        supplied_key_type: &'static str,
+    },
+}
+
+impl From<crate::verify::VerifyOutcome> for VerifyOutcomeSummary {
+    fn from(outcome: crate::verify::VerifyOutcome) -> Self {
+        use crate::verify::VerifyOutcome;
+        match outcome {
+            VerifyOutcome::Verified => VerifyOutcomeSummary::Verified,
+            VerifyOutcome::Failed { reason } => VerifyOutcomeSummary::Failed { reason },
+            VerifyOutcome::KeyTypeMismatch {
+                declared_alg,
+                supplied_key_type,
+            } => VerifyOutcomeSummary::KeyTypeMismatch {
+                declared_alg,
+                supplied_key_type,
+            },
+        }
+    }
 }
 
 /// A `Serialize`-friendly mirror of `RiskScore`. Kept as a separate type

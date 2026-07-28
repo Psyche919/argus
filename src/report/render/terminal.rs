@@ -1,5 +1,5 @@
 use super::Renderer;
-use crate::report::Report;
+use crate::report::{Report, VerifyOutcomeSummary};
 use std::fmt::Write;
 
 pub struct TerminalRenderer;
@@ -17,6 +17,30 @@ impl Renderer for TerminalRenderer {
 }
 
 fn render_one(report: &Report, out: &mut String) {
+    if let Some(verification) = &report.verification {
+        writeln!(out, "Verification").unwrap();
+        writeln!(out, "------------").unwrap();
+        match &verification.outcome {
+            VerifyOutcomeSummary::Verified => {
+                writeln!(out, "\u{2713} Signature verified").unwrap();
+                writeln!(out, "Key Type: {}", verification.key_type).unwrap();
+            }
+            VerifyOutcomeSummary::Failed { reason } => {
+                writeln!(out, "\u{2717} Signature verification failed").unwrap();
+                writeln!(out, "Reason: {reason}").unwrap();
+            }
+            VerifyOutcomeSummary::KeyTypeMismatch {
+                declared_alg,
+                supplied_key_type,
+            } => {
+                writeln!(out, "\u{26A0} Key type does not match declared algorithm").unwrap();
+                writeln!(out, "Declared algorithm: {declared_alg}").unwrap();
+                writeln!(out, "Supplied key type: {supplied_key_type}").unwrap();
+            }
+        }
+        writeln!(out).unwrap();
+    }
+
     if report.findings.is_empty() {
         writeln!(out, "No issues found. Overall risk: None").unwrap();
         return;
@@ -63,6 +87,7 @@ mod tests {
                 overall,
                 counts: SeverityCounts::default(),
             },
+            verification: None,
         }
     }
 
@@ -96,8 +121,6 @@ mod tests {
         let report_b = sample_report(vec![], None);
         let output = TerminalRenderer.render(&[report_a, report_b]);
 
-        // Both reports' "clean" messages should appear — proving a
-        // slice of multiple reports renders each one, not just the first.
         assert_eq!(output.matches("No issues found").count(), 2);
     }
 }
