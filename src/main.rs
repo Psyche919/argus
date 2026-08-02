@@ -47,6 +47,34 @@ enum Commands {
         #[arg(long)]
         public_key: Option<PathBuf>,
     },
+    /// Analyze multiple JWTs from a file (one token per line) or stdin
+    #[command(group(
+        ArgGroup::new("batch_key_source")
+            .args(["secret", "secret_file", "public_key"])
+            .multiple(false)
+    ))]
+    Batch {
+        /// Path to a file containing one JWT per line. Omit to read
+        /// tokens from stdin instead.
+        #[arg(long)]
+        file: Option<PathBuf>,
+
+        /// Output format
+        #[arg(long, value_enum, default_value_t = Format::Terminal)]
+        format: Format,
+
+        /// HMAC secret applied to every token in the batch
+        #[arg(long)]
+        secret: Option<String>,
+
+        /// Path to a file containing the HMAC secret
+        #[arg(long)]
+        secret_file: Option<PathBuf>,
+
+        /// Path to a PEM-encoded RSA public key file
+        #[arg(long)]
+        public_key: Option<PathBuf>,
+    },
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -81,47 +109,97 @@ fn main() {
             secret,
             secret_file,
             public_key,
-        } => run_analyze(token, format, secret, secret_file, public_key),
+        } => {
+            let config = load_config_or_exit();
+            let key = build_verification_key(secret, secret_file, public_key);
+            let report = analyze_one(&token, &config, key.as_ref());
+            print_reports(&[report], format);
+        }
+        Commands::Batch {
+            file,
+            format,
+            secret,
+            secret_file,
+            public_key,
+        } => {
+            let config = load_config_or_exit();
+            let key = build_verification_key(secret, secret_file, public_key);
+            let tokens = read_tokens(file);
+
+            let reports: Vec<Report> = tokens
+                .iter()
+                .map(|token| analyze_one(token, &config, key.as_ref()))
+                .collect();
+
+            print_reports(&reports, format);
+        }
     }
 }
 
-fn run_analyze(
-    token: String,
-    format: Format,
-    secret: Option<String>,
-    secret_file: Option<PathBuf>,
-    public_key: Option<PathBuf>,
-) {
-    let config = match argus::Config::load(std::path::Path::new("argus.toml")) {
-        Ok(c) => c,
-        Err(e) => {
-            eprintln!("Error loading config: {e}");
+/// Reads tokens either from a file (one per line) or from stdin if no
+/// file path was given. Blank lines are skipped.
+fn read_tokens(file: Option<PathBuf>) -> Vec<String> {
+    let contents = match file {
+        Some(path) => std::fs::read_to_string(&path).unwrap_or_else(|e| {
+            eprintln!("Error reading {}: {e}", path.display());
             std::process::exit(1);
+        }),
+        None => {
+            use std::io::Read;
+            let mut buf = String::new();
+            std::io::stdin()
+                .read_to_string(&mut buf)
+                .unwrap_or_else(|e| {
+                    eprintln!("Error reading stdin: {e}");
+                    std::process::exit(1);
+                });
+            buf
         }
     };
 
-    let decoded = match argus::decode(&token) {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!("Error: {e}");
-            std::process::exit(1);
-        }
-    };
+    contents
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect()
+}
 
-    let findings = argus::run_all(&decoded, &config);
+fn load_config_or_exit() -> argus::Config {
+    argus::Config::load(std::path::Path::new("argus.toml")).unwrap_or_else(|e| {
+        eprintln!("Error loading config: {e}");
+        std::process::exit(1);
+    })
+}
+
+/// Runs the full analysis pipeline (decode, checks, scoring, optional
+/// verification) for a single token, producing one `Report`.
+///
+/// This is the single core function both `analyze` and `batch` call —
+/// batch mode is purely "call this once per token, collect the
+/// results," with no separate analysis logic of its own.
+fn analyze_one(
+    token: &str,
+    config: &argus::Config,
+    key: Option<&argus::VerificationKey>,
+) -> Report {
+    let decoded = argus::decode(token).unwrap_or_else(|e| {
+        eprintln!("Error decoding token: {e}");
+        std::process::exit(1);
+    });
+
+    let findings = argus::run_all(&decoded, config);
     let risk = argus::score(&findings);
 
-    let verification_key = build_verification_key(secret, secret_file, public_key);
-
-    let verification = verification_key.map(|key| {
-        let outcome = argus::verify::verify(&decoded, &key);
+    let verification = key.map(|key| {
+        let outcome = argus::verify::verify(&decoded, key);
         argus::report::VerificationSummary {
             outcome: outcome.into(),
             key_type: key.type_name(),
         }
     });
 
-    let report = Report {
+    Report {
         token_summary: TokenSummary {
             header: decoded.header,
             payload: decoded.payload,
@@ -129,15 +207,16 @@ fn run_analyze(
         findings,
         risk: RiskScoreSummary::from(risk),
         verification,
-    };
+    }
+}
 
+fn print_reports(reports: &[Report], format: Format) {
     let renderer: Box<dyn Renderer> = match format {
         Format::Terminal => Box::new(TerminalRenderer),
         Format::Json => Box::new(JsonRenderer),
     };
 
-    let output = renderer.render(&[report]);
-    println!("{output}");
+    println!("{}", renderer.render(reports));
 }
 
 /// Resolves the mutually-exclusive key-source flags into a single
