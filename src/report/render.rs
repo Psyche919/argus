@@ -1,4 +1,6 @@
+pub mod html;
 pub mod json;
+pub mod markdown;
 pub mod terminal;
 
 use crate::report::Report;

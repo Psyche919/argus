@@ -1,4 +1,7 @@
-use argus::{JsonRenderer, Renderer, Report, RiskScoreSummary, TerminalRenderer, TokenSummary};
+use argus::{
+    HtmlRenderer, JsonRenderer, MarkdownRenderer, Renderer, Report, RiskScoreSummary,
+    TerminalRenderer, TokenSummary,
+};
 use clap::{ArgGroup, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
@@ -34,6 +37,10 @@ enum Commands {
         #[arg(long, value_enum, default_value_t = Format::Terminal)]
         format: Format,
 
+        /// Write output to a file instead of stdout
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
         /// HMAC secret, passed directly (avoid for sensitive secrets —
         /// prefer --secret-file, since shell history can leak this)
         #[arg(long)]
@@ -63,6 +70,10 @@ enum Commands {
         #[arg(long, value_enum, default_value_t = Format::Terminal)]
         format: Format,
 
+        /// Write output to a file instead of stdout
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
         /// HMAC secret applied to every token in the batch
         #[arg(long)]
         secret: Option<String>,
@@ -81,6 +92,8 @@ enum Commands {
 enum Format {
     Terminal,
     Json,
+    Markdown,
+    Html,
 }
 
 fn main() {
@@ -106,6 +119,7 @@ fn main() {
         Commands::Analyze {
             token,
             format,
+            output,
             secret,
             secret_file,
             public_key,
@@ -113,11 +127,12 @@ fn main() {
             let config = load_config_or_exit();
             let key = build_verification_key(secret, secret_file, public_key);
             let report = analyze_one(&token, &config, key.as_ref());
-            print_reports(&[report], format);
+            emit_reports(&[report], format, output);
         }
         Commands::Batch {
             file,
             format,
+            output,
             secret,
             secret_file,
             public_key,
@@ -131,7 +146,7 @@ fn main() {
                 .map(|token| analyze_one(token, &config, key.as_ref()))
                 .collect();
 
-            print_reports(&reports, format);
+            emit_reports(&reports, format, output);
         }
     }
 }
@@ -210,13 +225,26 @@ fn analyze_one(
     }
 }
 
-fn print_reports(reports: &[Report], format: Format) {
+fn emit_reports(reports: &[Report], format: Format, output: Option<PathBuf>) {
     let renderer: Box<dyn Renderer> = match format {
         Format::Terminal => Box::new(TerminalRenderer),
         Format::Json => Box::new(JsonRenderer),
+        Format::Markdown => Box::new(MarkdownRenderer),
+        Format::Html => Box::new(HtmlRenderer),
     };
 
-    println!("{}", renderer.render(reports));
+    let rendered = renderer.render(reports);
+
+    match output {
+        Some(path) => {
+            std::fs::write(&path, &rendered).unwrap_or_else(|e| {
+                eprintln!("Error writing to {}: {e}", path.display());
+                std::process::exit(1);
+            });
+            eprintln!("Report written to {}", path.display());
+        }
+        None => println!("{rendered}"),
+    }
 }
 
 /// Resolves the mutually-exclusive key-source flags into a single

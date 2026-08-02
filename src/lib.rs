@@ -21,7 +21,10 @@ pub use scoring::{RiskScore, SeverityCounts, score};
 
 pub use config::{Config, ConfigError};
 
-pub use report::render::{Renderer, json::JsonRenderer, terminal::TerminalRenderer};
+pub use report::render::{
+    Renderer, html::HtmlRenderer, json::JsonRenderer, markdown::MarkdownRenderer,
+    terminal::TerminalRenderer,
+};
 pub use report::{Report, RiskScoreSummary, TokenSummary};
 
 pub use verify::{VerificationKey, VerifyOutcome, load_rsa_public_key};
